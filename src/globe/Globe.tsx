@@ -4,6 +4,9 @@ import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { useReducedMotion } from '@/store/useJukebox';
+import { DataLayer } from './DataLayer';
+import { ScanLine } from './ScanLine';
+import { Picker } from './Picker';
 
 /**
  * Procedurally generates a dark blue canvas texture with an equirectangular
@@ -179,12 +182,20 @@ const EarthSphere: React.FC = () => {
 
 /**
  * 3D Interactive Earth Globe for the Earth Information Jukebox.
+ * Features:
+ * - NASA Blue Marble basemap sphere with procedural grid fallback
+ * - Equirectangular DataLayer (radius 1.005) with 400ms cross-fading and synthetic grid mode
+ * - Glowing meridian ScanLine (radius 1.008) tied to playhead with transient Zustand subscription
+ * - Raycast Picker (radius 1.006) with ring cursor marker (radius 1.012)
+ * - Subtle atmospheric Fresnel glow (radius 1.035)
+ * - Background starfield and OrbitControls
  */
 export const Globe: React.FC = () => {
   const reducedMotion = useReducedMotion();
   const [autoRotate, setAutoRotate] = useState(!reducedMotion);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
+  const globeGroupRef = useRef<THREE.Group>(null);
 
   // Sync reducedMotion setting with auto-rotate state
   useEffect(() => {
@@ -245,8 +256,15 @@ export const Globe: React.FC = () => {
         <directionalLight position={[5, 3, 5]} intensity={1.8} />
         <directionalLight position={[-5, -3, -5]} intensity={0.3} color="#1E3A6D" />
 
-        {/* Earth globe and atmospheric glow */}
-        <EarthSphere />
+        {/* Primary Globe Group: Earth, Data Layer, ScanLine, and Picker */}
+        <group ref={globeGroupRef}>
+          <EarthSphere />
+          <DataLayer />
+          <ScanLine />
+          <Picker globeRef={globeGroupRef} />
+        </group>
+
+        {/* Atmospheric outer glow */}
         <Atmosphere />
 
         {/* Camera interaction controls */}
