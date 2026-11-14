@@ -1,58 +1,48 @@
-import React, { useEffect } from 'react';
-import { useJukebox } from '@/store/useJukebox';
-import { makeFakeTrack } from '@/data/fake';
-import { Globe } from '@/globe/Globe';
-import { AudioEngine } from '@/audio/AudioEngine';
-import { Deck } from '@/ui/Deck';
-import { Legend } from '@/ui/Legend';
-import { Captions } from '@/ui/Captions';
+import React, { useEffect, useState } from 'react';
+import { useStatus } from '@/store/useJukebox';
+import { bootstrap } from '@/app/bootstrap';
+import { Layout } from '@/app/Layout';
+import { ErrorBoundary } from '@/app/ErrorBoundary';
+import { HelpDialog } from '@/app/HelpDialog';
+import { useKeyboard } from '@/app/useKeyboard';
 import { StartScreen } from '@/ui/StartScreen';
+import { AudioEngine } from '@/audio/AudioEngine';
+import { Captions } from '@/ui/Captions';
 
 export const App: React.FC = () => {
-  const setTracks = useJukebox((s) => s.setTracks);
+  const status = useStatus();
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
+  // Wire global keyboard shortcuts
+  useKeyboard({
+    isHelpOpen,
+    onToggleHelp: () => setIsHelpOpen((prev) => !prev),
+    onCloseHelp: () => setIsHelpOpen(false),
+  });
+
+  // Initialize track catalogue and detect prefers-reduced-motion on start
   useEffect(() => {
-    // Initialize default tracks
-    const defaultTracks = [
-      makeFakeTrack('ocean-fever'),
-      makeFakeTrack('breathing-planet'),
-      makeFakeTrack('melting-crown'),
-      makeFakeTrack('fire-season'),
-    ];
-    setTracks(defaultTracks);
-  }, [setTracks]);
+    bootstrap({ setReady: false });
+  }, []);
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-950 text-slate-100">
-      <StartScreen />
+    <ErrorBoundary>
+      {/* Headless AudioEngine is always mounted */}
       <AudioEngine />
 
-      <header className="px-6 py-4 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight text-white">
-            Earth Information Jukebox
-          </h1>
-          <p className="text-xs text-slate-400">
-            NASA Space Apps Challenge 2026 - Real-time Earth Data Sonification
-          </p>
-        </div>
-        <div className="text-xs font-mono text-slate-500">
-          Vite + React + Three.js + Tone.js + Zustand
-        </div>
-      </header>
+      {/* Screen-reader accessible Captions live region is always mounted */}
+      <Captions />
 
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 max-w-7xl w-full mx-auto">
-        <section className="lg:col-span-2 flex flex-col gap-6">
-          <Globe />
-          <Captions />
-        </section>
+      {/* Primary view routing: StartScreen when idle, otherwise main Layout */}
+      {status === 'idle' ? (
+        <StartScreen />
+      ) : (
+        <Layout onOpenHelp={() => setIsHelpOpen(true)} />
+      )}
 
-        <section className="flex flex-col gap-6">
-          <Deck />
-          <Legend />
-        </section>
-      </main>
-    </div>
+      {/* Global accessible shortcuts modal */}
+      <HelpDialog isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+    </ErrorBoundary>
   );
 };
 

@@ -51,7 +51,7 @@ export const useJukebox = create<JukeboxState>((set, get) => ({
   unlockAudio: () => {
     const current = get().status;
     if (current === 'idle') {
-      set({ status: 'audioUnlocked' });
+      set({ status: 'ready' });
     }
   },
 
