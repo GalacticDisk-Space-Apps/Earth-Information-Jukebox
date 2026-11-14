@@ -1,0 +1,18 @@
+# Code Owners for Earth Information Jukebox
+
+# Default fallback lead
+* @aditya-lead
+
+# 3D Globe visualization (three.js / R3F)
+/src/globe/ @aarav-globe
+
+# Sonification engine (Tone.js / Web Audio)
+/src/audio/ @swanand-audio
+
+# NASA data extraction & preprocessing pipeline
+/scripts/ @avidan-data
+/src/data/ @avidan-data
+
+# User interface, deck controls, accessibility, and documentation
+/src/ui/ @neil-ui
+/docs/ @neil-ui
