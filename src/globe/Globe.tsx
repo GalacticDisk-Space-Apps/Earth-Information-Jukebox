@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -7,6 +7,16 @@ import { useReducedMotion } from '@/store/useJukebox';
 import { DataLayer } from './DataLayer';
 import { ScanLine } from './ScanLine';
 import { Picker } from './Picker';
+import { cameraPresetOrder, createCameraPresets } from './cameraPresets';
+import { limitTextureSize } from './textureSize';
+
+const sunPosition: [number, number, number] = [5, 3, 5];
+const audioModules = import.meta.glob<{ getLevel?: () => number }>(
+  ['../audio/index.ts', '../audio/index.tsx', '../audio/AudioEngine.tsx'],
+  { eager: true },
+);
+const getLevel = Object.values(audioModules).find((module) => typeof module.getLevel === 'function')?.getLevel;
+
 
 /**
  * Procedurally generates a dark blue canvas texture with an equirectangular
@@ -104,6 +114,7 @@ const Atmosphere: React.FC = () => {
         varying vec3 vNormal;
         varying vec3 vViewDir;
         uniform vec3 uColor;
+        uniform float uIntensity;
 
         void main() {
           // With BackSide, the interior is occluded by Earth (radius 1.0).
@@ -112,11 +123,12 @@ const Atmosphere: React.FC = () => {
           float intensity = 1.0 + dotProduct;
           intensity = clamp(intensity, 0.0, 1.0);
           intensity = pow(intensity, 2.2);
-          gl_FragColor = vec4(uColor, intensity * 0.7);
+          gl_FragColor = vec4(uColor, intensity * 0.7 * uIntensity);
         }
       `,
       uniforms: {
         uColor: { value: new THREE.Color('#4F8BFF') },
+        uIntensity: { value: 1 },
       },
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide,
@@ -124,6 +136,13 @@ const Atmosphere: React.FC = () => {
       depthWrite: false,
     });
   }, []);
+
+  useEffect(() => () => atmosphereMaterial.dispose(), [atmosphereMaterial]);
+  useFrame(() => {
+    if (!getLevel) return;
+    const level = getLevel();
+    if (Number.isFinite(level)) atmosphereMaterial.uniforms.uIntensity.value = 0.8 + level * 0.4;
+  });
 
   return (
     <mesh>
@@ -138,83 +157,160 @@ const Atmosphere: React.FC = () => {
  * equirectangular texture or dark blue lat/lon grid fallback.
  */
 const EarthSphere: React.FC = () => {
-  const fallbackTexture = useMemo(() => createFallbackGridTexture(), []);
-  const [activeTexture, setActiveTexture] = useState<THREE.Texture>(fallbackTexture);
+  const maxTextureSize = useThree((state) => state.gl.capabilities.maxTextureSize);
+  const material = useMemo(() => new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.1 }), []);
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
     const loader = new THREE.TextureLoader();
+    let dayTexture = createFallbackGridTexture();
+    let nightTexture: THREE.Texture | undefined;
+    const sunDirection = new THREE.Vector3(...sunPosition).normalize();
+    material.map = dayTexture;
+    material.needsUpdate = true;
 
-    loader.load(
-      '/textures/earth_day.jpg',
-      (loadedTexture) => {
-        if (!isMounted) return;
-        loadedTexture.colorSpace = THREE.SRGBColorSpace;
-        loadedTexture.wrapS = THREE.RepeatWrapping;
-        loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
-        setActiveTexture(loadedTexture);
-      },
-      undefined,
-      () => {
-        // Fall back gracefully to the coordinate grid material
-        if (isMounted) {
-          setActiveTexture(fallbackTexture);
+    function loadTexture(url: string, apply: (texture: THREE.Texture) => void) {
+      loader.load(url, (texture) => {
+        if (!mounted) {
+          texture.dispose();
+          return;
         }
-      }
-    );
+        limitTextureSize(texture, maxTextureSize);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        apply(texture);
+        material.needsUpdate = true;
+      }, undefined, () => {
+        // Keep the existing basemap when an optional image is unavailable.
+      });
+    }
+
+    loadTexture('/textures/earth_day.jpg', (texture) => {
+      dayTexture.dispose();
+      dayTexture = texture;
+      material.map = texture;
+    });
+
+    loadTexture('/textures/earth_night.jpg', (texture) => {
+      nightTexture = texture;
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.uNightMap = { value: texture };
+        shader.uniforms.uSunDirection = { value: sunDirection };
+        shader.vertexShader = /* glsl */ `
+          varying vec2 vNightUv;
+          varying vec3 vWorldNormal;
+        ` + shader.vertexShader.replace('#include <begin_vertex>', /* glsl */ `
+          #include <begin_vertex>
+          vNightUv = uv;
+          vWorldNormal = mat3(modelMatrix) * normal;
+        `);
+        shader.fragmentShader = /* glsl */ `
+          uniform sampler2D uNightMap;
+          uniform vec3 uSunDirection;
+          varying vec2 vNightUv;
+          varying vec3 vWorldNormal;
+        ` + shader.fragmentShader.replace('#include <opaque_fragment>', /* glsl */ `
+          float sunlight = dot(normalize(vWorldNormal), uSunDirection);
+          float nightBlend = 1.0 - smoothstep(-0.15, 0.10, sunlight);
+          outgoingLight = mix(outgoingLight, texture2D(uNightMap, vNightUv).rgb, nightBlend);
+          #include <opaque_fragment>
+        `);
+      };
+    });
 
     return () => {
-      isMounted = false;
+      mounted = false;
+      material.map = null;
+      material.onBeforeCompile = THREE.Material.prototype.onBeforeCompile;
+      dayTexture.dispose();
+      nightTexture?.dispose();
+      material.dispose();
     };
-  }, [fallbackTexture]);
+  }, [material, maxTextureSize]);
 
   return (
     <mesh>
-      <sphereGeometry args={[1, 128, 128]} />
-      <meshStandardMaterial
-        map={activeTexture}
-        roughness={0.7}
-        metalness={0.1}
-      />
+      <sphereGeometry args={[1, 96, 64]} />
+      <primitive object={material} attach="material" />
     </mesh>
   );
 };
 
-/**
- * 3D Interactive Earth Globe for the Earth Information Jukebox.
- * Features:
- * - NASA Blue Marble basemap sphere with procedural grid fallback
- * - Equirectangular DataLayer (radius 1.005) with 400ms cross-fading and synthetic grid mode
- * - Glowing meridian ScanLine (radius 1.008) tied to playhead with transient Zustand subscription
- * - Raycast Picker (radius 1.006) with ring cursor marker (radius 1.012)
- * - Subtle atmospheric Fresnel glow (radius 1.035)
- * - Background starfield and OrbitControls
- */
-export const Globe: React.FC = () => {
+function CameraMotion({
+  cinematic,
+  autoRotate,
+  controlsRef,
+  presets,
+}: {
+  cinematic: boolean;
+  autoRotate: boolean;
+  controlsRef: React.RefObject<OrbitControlsImpl>;
+  presets: ReturnType<typeof createCameraPresets>;
+}) {
+  const orbitSpeed = useRef(0);
+  useEffect(() => {
+    if (!cinematic) {
+      presets.cancel();
+      orbitSpeed.current = 0;
+      return;
+    }
+
+    let index = 0;
+    const cycle = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey ||
+          event.key.toLowerCase() !== 'c' ||
+          (event.target instanceof HTMLElement &&
+            (event.target.isContentEditable || event.target.closest('input, textarea, select')))) return;
+      presets.flyTo(cameraPresetOrder[index]);
+      index = (index + 1) % cameraPresetOrder.length;
+    };
+
+    window.addEventListener('keydown', cycle);
+    return () => window.removeEventListener('keydown', cycle);
+  }, [cinematic, presets]);
+
+  useFrame((_, delta) => {
+    const controls = controlsRef.current;
+    if (!controls || !cinematic) return;
+    if (presets.update(controls, delta)) {
+      orbitSpeed.current = 0;
+      controls.object.lookAt(controls.target);
+      return;
+    }
+
+    orbitSpeed.current = THREE.MathUtils.damp(orbitSpeed.current, autoRotate ? 0.009 : 0, 2, delta);
+    if (orbitSpeed.current < 0.00001) return;
+    const offset = controls.object.position.sub(controls.target);
+    offset.applyAxisAngle(THREE.Object3D.DEFAULT_UP, -orbitSpeed.current * delta).add(controls.target);
+    controls.object.lookAt(controls.target);
+  });
+
+  return null;
+}
+
+export interface GlobeProps {
+  cinematic?: boolean;
+}
+
+export const Globe: React.FC<GlobeProps> = ({
+  cinematic = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('cinematic') === '1',
+}) => {
+  const presets = useMemo(createCameraPresets, []);
   const reducedMotion = useReducedMotion();
   const [autoRotate, setAutoRotate] = useState(!reducedMotion);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const globeGroupRef = useRef<THREE.Group>(null);
 
-  // Sync reducedMotion setting with auto-rotate state
   useEffect(() => {
-    if (reducedMotion) {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      setAutoRotate(false);
-    } else {
-      setAutoRotate(true);
-    }
-  }, [reducedMotion]);
-
-  // Clean up interaction timer on unmount
-  useEffect(() => {
+    setAutoRotate(!reducedMotion);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, []);
+  }, [reducedMotion]);
 
   const handleStart = () => {
+    presets.cancel();
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -223,14 +319,9 @@ export const Globe: React.FC = () => {
   };
 
   const handleEnd = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
+    if (timerRef.current) clearTimeout(timerRef.current);
     if (!reducedMotion) {
-      timerRef.current = setTimeout(() => {
-        setAutoRotate(true);
-      }, 4000);
+      timerRef.current = setTimeout(() => setAutoRotate(true), 4000);
     }
   };
 
@@ -243,20 +334,16 @@ export const Globe: React.FC = () => {
       style={{ backgroundColor: '#070B14' }}
     >
       <Canvas
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         gl={{ antialias: true, alpha: true }}
         camera={{ position: [0, 0, 2.5], fov: 45 }}
         style={{ width: '100%', height: '100%' }}
       >
-        {/* Background cosmic field */}
         <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={1} />
-
-        {/* Scene illumination */}
         <ambientLight intensity={0.4} />
-        <directionalLight position={[5, 3, 5]} intensity={1.8} />
+        <directionalLight position={sunPosition} intensity={1.8} />
         <directionalLight position={[-5, -3, -5]} intensity={0.3} color="#1E3A6D" />
 
-        {/* Primary Globe Group: Earth, Data Layer, ScanLine, and Picker */}
         <group ref={globeGroupRef}>
           <EarthSphere />
           <DataLayer />
@@ -264,22 +351,20 @@ export const Globe: React.FC = () => {
           <Picker globeRef={globeGroupRef} />
         </group>
 
-        {/* Atmospheric outer glow */}
         <Atmosphere />
-
-        {/* Camera interaction controls */}
         <OrbitControls
           ref={controlsRef}
           enablePan={false}
-          enableDamping={true}
-          dampingFactor={0.05}
+          enableDamping
+          dampingFactor={cinematic ? 0.035 : 0.05}
           minDistance={1.3}
           maxDistance={5.0}
-          autoRotate={isAutoRotating}
+          autoRotate={!cinematic && isAutoRotating}
           autoRotateSpeed={0.5}
           onStart={handleStart}
           onEnd={handleEnd}
         />
+        <CameraMotion cinematic={cinematic} autoRotate={isAutoRotating} controlsRef={controlsRef} presets={presets} />
       </Canvas>
     </div>
   );

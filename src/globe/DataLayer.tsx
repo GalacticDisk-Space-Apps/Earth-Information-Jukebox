@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useJukebox } from '@/store/useJukebox';
 import { FAKE_MODE, makeFakeGrid } from '@/data/fake';
+import { limitTextureSize } from './textureSize';
 
 /**
  * Creates an empty transparent 1x1 fallback texture.
@@ -172,63 +173,60 @@ export const DataLayer: React.FC = () => {
     });
   }, [emptyTexture]);
 
-  // Load new texture whenever track or frame date changes
+  const maxTextureSize = useThree((state) => state.gl.capabilities.maxTextureSize);
+
+  useEffect(() => () => {
+    const textures = new Set([emptyTexture, prevTextureRef.current, currTextureRef.current]);
+    textures.forEach((texture) => texture.dispose());
+    prevTextureRef.current = emptyTexture;
+    currTextureRef.current = emptyTexture;
+    material.dispose();
+  }, [emptyTexture, material]);
+
   useEffect(() => {
     let isMounted = true;
 
-    if (FAKE_MODE || !activeTrack || !activeFrameDate) {
-      // Procedurally generate fake dataset texture
-      const newTex = createFakeGridTexture(frameIndex);
-
-      // Start 400ms crossfade
+    function transitionTo(texture: THREE.Texture) {
+      const previous = prevTextureRef.current;
+      if (previous !== emptyTexture && previous !== currTextureRef.current) previous.dispose();
       prevTextureRef.current = currTextureRef.current;
-      currTextureRef.current = newTex;
+      currTextureRef.current = texture;
       material.uniforms.uPrevTexture.value = prevTextureRef.current;
-      material.uniforms.uCurrTexture.value = currTextureRef.current;
-      blendRef.current = 0.0;
+      material.uniforms.uCurrTexture.value = texture;
+      material.uniforms.uBlend.value = 0;
+      blendRef.current = 0;
       isTransitioningRef.current = true;
+    }
+
+    if (FAKE_MODE || !activeTrack || !activeFrameDate) {
+      transitionTo(createFakeGridTexture(frameIndex));
     } else {
-      // Real webp frame texture path: /data/<trackId>/frames/<date>.webp
       const texturePath = `/data/${activeTrack.id}/frames/${activeFrameDate}.webp`;
-      const loader = new THREE.TextureLoader();
-
-      loader.load(
+      new THREE.TextureLoader().load(
         texturePath,
-        (loadedTex) => {
-          if (!isMounted) return;
-          loadedTex.colorSpace = THREE.SRGBColorSpace;
-          loadedTex.wrapS = THREE.RepeatWrapping;
-          loadedTex.wrapT = THREE.ClampToEdgeWrapping;
-          loadedTex.minFilter = THREE.LinearFilter;
-          loadedTex.magFilter = THREE.LinearFilter;
-
-          // Cross-fade to newly loaded texture
-          prevTextureRef.current = currTextureRef.current;
-          currTextureRef.current = loadedTex;
-          material.uniforms.uPrevTexture.value = prevTextureRef.current;
-          material.uniforms.uCurrTexture.value = currTextureRef.current;
-          blendRef.current = 0.0;
-          isTransitioningRef.current = true;
+        (texture) => {
+          if (!isMounted) {
+            texture.dispose();
+            return;
+          }
+          limitTextureSize(texture, maxTextureSize);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.minFilter = THREE.LinearFilter;
+          texture.generateMipmaps = false;
+          transitionTo(texture);
         },
         undefined,
         () => {
-          // If frame file is not found, fallback to synthetic grid to maintain visualization
-          if (!isMounted) return;
-          const fallbackTex = createFakeGridTexture(frameIndex);
-          prevTextureRef.current = currTextureRef.current;
-          currTextureRef.current = fallbackTex;
-          material.uniforms.uPrevTexture.value = prevTextureRef.current;
-          material.uniforms.uCurrTexture.value = currTextureRef.current;
-          blendRef.current = 0.0;
-          isTransitioningRef.current = true;
-        }
+          if (isMounted) transitionTo(createFakeGridTexture(frameIndex));
+        },
       );
     }
 
     return () => {
       isMounted = false;
     };
-  }, [activeTrack, activeFrameDate, frameIndex, material]);
+  }, [activeTrack, activeFrameDate, emptyTexture, frameIndex, material, maxTextureSize]);
 
   // Animate 400ms crossfade over delta time
   useFrame((_, delta) => {
@@ -239,6 +237,8 @@ export const DataLayer: React.FC = () => {
 
       if (blendRef.current >= 1.0) {
         isTransitioningRef.current = false;
+        const previous = prevTextureRef.current;
+        if (previous !== emptyTexture && previous !== currTextureRef.current) previous.dispose();
         prevTextureRef.current = currTextureRef.current;
         material.uniforms.uPrevTexture.value = currTextureRef.current;
       }
@@ -247,7 +247,7 @@ export const DataLayer: React.FC = () => {
 
   return (
     <mesh>
-      <sphereGeometry args={[1.005, 128, 128]} />
+      <sphereGeometry args={[1.005, 96, 64]} />
       <primitive object={material} attach="material" />
     </mesh>
   );
