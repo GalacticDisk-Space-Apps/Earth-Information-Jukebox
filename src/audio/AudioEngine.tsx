@@ -10,6 +10,7 @@ import {
   useActiveTrack,
   useFrameIndex,
 } from '@/store/useJukebox';
+import { loadValueGrid } from '@/data/loadTrack';
 import { engine } from './engine';
 
 /**
@@ -64,10 +65,48 @@ export const AudioEngine: React.FC = () => {
     }
   }, [activeTrack]);
 
-  // Frame index (year) change
+  // Frame index and real scientific ValueGrid synchronization
   useEffect(() => {
-    engine.setFrame(frameIndex);
-  }, [frameIndex]);
+    let isCancelled = false;
+
+    if (!activeTrack) {
+      engine.setFrame(frameIndex);
+      return;
+    }
+
+    const frameDate = activeTrack.frames[frameIndex];
+    if (!frameDate) {
+      engine.setFrame(frameIndex);
+      return;
+    }
+
+    // Fetch Avidan's real decoded grid for the current track and frame
+    loadValueGrid(activeTrack.id, frameDate, frameIndex)
+      .then((grid) => {
+        if (!isCancelled) {
+          engine.setFrame(frameIndex, grid);
+        }
+      })
+      .catch((err) => {
+        console.warn(
+          `[AudioEngine] Failed to load real grid for ${activeTrack.id}@${frameDate}:`,
+          err
+        );
+        if (!isCancelled) {
+          engine.setFrame(frameIndex);
+        }
+      });
+
+    // Proactively preload the next frame for seamless playback
+    if (frameIndex + 1 < activeTrack.frames.length) {
+      const nextDate = activeTrack.frames[frameIndex + 1];
+      loadValueGrid(activeTrack.id, nextDate, frameIndex + 1).catch(() => {});
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeTrack, frameIndex]);
 
   // Mode change
   useEffect(() => {

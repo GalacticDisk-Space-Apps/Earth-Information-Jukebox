@@ -19,26 +19,24 @@ export interface InstrumentVoice {
  */
 export function createPadInstrument(destination: Tone.InputNode): InstrumentVoice {
   const synth = new Tone.PolySynth(Tone.FMSynth, {
-    maxPolyphony: 8,
-    options: {
-      harmonicity: 1,
-      modulationIndex: 1.2,
-      oscillator: { type: 'sine' },
-      envelope: {
-        attack: 0.08,
-        decay: 0.3,
-        sustain: 0.7,
-        release: 0.8,
-      },
-      modulation: { type: 'sine' },
-      modulationEnvelope: {
-        attack: 0.1,
-        decay: 0.3,
-        sustain: 0.6,
-        release: 0.8,
-      },
+    harmonicity: 1,
+    modulationIndex: 1.2,
+    oscillator: { type: 'sine' },
+    envelope: {
+      attack: 0.08,
+      decay: 0.3,
+      sustain: 0.7,
+      release: 0.8,
+    },
+    modulation: { type: 'sine' },
+    modulationEnvelope: {
+      attack: 0.1,
+      decay: 0.3,
+      sustain: 0.6,
+      release: 0.8,
     },
   });
+  synth.maxPolyphony = 8;
 
   const outputGain = new Tone.Gain(0.7);
   synth.connect(outputGain);

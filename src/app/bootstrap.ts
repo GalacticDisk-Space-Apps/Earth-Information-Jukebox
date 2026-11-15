@@ -1,5 +1,6 @@
 import { useJukebox } from '@/store/useJukebox';
 import { FAKE_MODE, makeFakeTrack } from '@/data/fake';
+import { loadAvailableTracks } from '@/data/loadTrack';
 import type { TrackMeta } from '@/data/types';
 
 interface BootstrapOptions {
@@ -36,18 +37,7 @@ export async function bootstrap(options: BootstrapOptions = { setReady: true }):
     ];
   } else {
     try {
-      const response = await fetch('/data/tracks.json');
-      if (response.ok) {
-        tracks = (await response.json()) as TrackMeta[];
-      } else {
-        // Fallback to fake data presets if static tracks file is not yet deployed
-        tracks = [
-          makeFakeTrack('ocean-fever'),
-          makeFakeTrack('breathing-planet'),
-          makeFakeTrack('melting-crown'),
-          makeFakeTrack('fire-season'),
-        ];
-      }
+      tracks = await loadAvailableTracks();
     } catch {
       tracks = [
         makeFakeTrack('ocean-fever'),

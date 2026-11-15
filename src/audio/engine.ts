@@ -5,7 +5,6 @@ import {
   columnToChord,
   computeGlobalMean,
   lonToPan,
-  sampleColumnLatitudeBands,
   valueToNote,
 } from './mappings';
 import { createInstrument, type InstrumentVoice } from './instruments';
@@ -34,8 +33,8 @@ export class AudioEngine {
   private transportEventId: number | null = null;
   private currentColumn = 0;
   private totalColumns = 180;
-  private readonly sweepDurationSeconds = 8.0;
-  private readonly stepInterval = 8.0 / 180; // ~0.0444s per column (~22.5 Hz)
+  private static readonly sweepDurationSeconds = 8.0;
+  private readonly stepInterval = AudioEngine.sweepDurationSeconds / 180; // ~0.0444s per column (~22.5 Hz)
 
   // Current dataset & grid state
   private activeTrack: TrackMeta = makeFakeTrack('ocean-fever');
