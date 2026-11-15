@@ -118,7 +118,7 @@ describe('Sonification Mappings & Scales', () => {
       expect(chord.length).toBeLessThanOrEqual(5);
       // Every note in the chord belongs to the pentatonic scale
       for (const note of chord) {
-        expect(PENTATONIC_SCALE).toContain(note as any);
+        expect(PENTATONIC_SCALE).toContain(note as (typeof PENTATONIC_SCALE)[number]);
       }
     });
 
