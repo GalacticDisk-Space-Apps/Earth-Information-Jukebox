@@ -2,6 +2,10 @@ import React from 'react';
 import { useActiveTrack, usePlayhead, useIsPlaying, useSelection } from '@/store/useJukebox';
 import { placeName, formatCoordinates } from '@/data/series';
 
+/**
+ * Captions component providing real-time screen-reader accessible live regions
+ * describing sonification playback, sweep longitude, and point inspection events.
+ */
 export const Captions: React.FC = () => {
   const activeTrack = useActiveTrack();
   const playhead = usePlayhead();
@@ -23,21 +27,11 @@ export const Captions: React.FC = () => {
   return (
     <div
       data-testid="captions-container"
-      className="p-4 bg-slate-900/90 border-2 border-dashed border-purple-500 rounded-xl"
+      className="sr-only"
+      aria-live="polite"
+      aria-atomic="true"
     >
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
-        <span className="text-xs font-mono uppercase tracking-wider text-purple-400">
-          Captions (aria-live region)
-        </span>
-      </div>
-
-      <div
-        aria-live="polite"
-        aria-atomic="true"
-        className="text-xs text-slate-300 font-mono"
-      >
-        <p>{message}</p>
-      </div>
+      <p>{message}</p>
     </div>
   );
 };

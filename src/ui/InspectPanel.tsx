@@ -209,11 +209,7 @@ export const InspectPanel: React.FC = () => {
       tabIndex={-1}
       aria-labelledby="inspect-panel-title"
       aria-describedby="inspect-panel-desc"
-      className="absolute bottom-4 left-4 z-20 w-80 max-w-[calc(100vw-2rem)] rounded-xl border p-4 shadow-2xl backdrop-blur-md text-slate-100 outline-none animate-in fade-in slide-in-from-bottom-2 duration-200"
-      style={{
-        backgroundColor: 'rgba(15, 22, 38, 0.94)',
-        borderColor: '#1E2A40',
-      }}
+      className="absolute bottom-4 left-4 z-20 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/[0.12] p-4 shadow-2xl backdrop-blur-2xl bg-black/85 text-white outline-none animate-in fade-in duration-200"
     >
       {/* Hidden Live Region for Screen-Reader Announcements */}
       <div aria-live="polite" className="sr-only">
@@ -221,15 +217,15 @@ export const InspectPanel: React.FC = () => {
       </div>
 
       {/* Header with Place Name and Close button */}
-      <div className="flex items-start justify-between gap-2 border-b pb-2 mb-3" style={{ borderColor: '#1E2A40' }}>
+      <div className="flex items-start justify-between gap-2 border-b border-white/[0.08] pb-2.5 mb-3">
         <div>
           <h2
             id="inspect-panel-title"
-            className="text-sm font-bold text-white tracking-tight leading-snug truncate"
+            className="font-display font-medium text-sm text-white tracking-tight leading-snug truncate"
           >
             {locationName}
           </h2>
-          <p id="inspect-panel-desc" className="text-xs text-slate-400 font-mono mt-0.5">
+          <p id="inspect-panel-desc" className="font-mono text-[11px] uppercase tracking-[0.1em] text-white/50 mt-0.5">
             {coordsStr}
           </p>
         </div>
@@ -238,13 +234,9 @@ export const InspectPanel: React.FC = () => {
           type="button"
           onClick={clearSelection}
           aria-label="Close inspector (Escape)"
-          className="px-2 py-0.5 rounded text-xs font-mono text-slate-400 hover:text-white transition-colors border"
-          style={{
-            backgroundColor: '#070B14',
-            borderColor: '#1E2A40',
-          }}
+          className="px-2 py-0.5 rounded-lg text-xs font-mono text-white/50 hover:text-white transition-colors bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08]"
         >
-          ✕
+          Close
         </button>
       </div>
 
@@ -254,10 +246,10 @@ export const InspectPanel: React.FC = () => {
           <span className="text-2xl font-bold font-mono tracking-tight text-white">
             {currentVal !== null ? currentVal.toFixed(1) : '—'}
           </span>
-          <span className="text-sm font-medium text-slate-300">
+          <span className="text-sm font-medium text-white/60">
             {activeTrack.unit}
           </span>
-          <span className="text-xs font-mono text-slate-400">
+          <span className="text-xs font-mono text-white/40">
             ({currentYear})
           </span>
         </div>
@@ -274,21 +266,17 @@ export const InspectPanel: React.FC = () => {
 
       {/* Sparkline Visual Time-Series */}
       <div className="my-3">
-        <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono mb-1">
+        <div className="flex justify-between items-center text-[10px] text-white/40 font-mono mb-1">
           <span>{series[0]?.date ?? '2004'}</span>
-          <span className="text-slate-500">Historical Trend</span>
+          <span className="uppercase tracking-widest text-white/30">Historical Trend</span>
           <span>{series[series.length - 1]?.date ?? '2024'}</span>
         </div>
 
         <div
-          className="relative h-10 w-full rounded border overflow-hidden flex items-center justify-center"
-          style={{
-            backgroundColor: '#070B14',
-            borderColor: '#1E2A40',
-          }}
+          className="relative h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] overflow-hidden flex items-center justify-center"
         >
           {loading ? (
-            <span className="text-[11px] text-slate-500 font-mono">Loading data...</span>
+            <span className="text-[11px] text-white/40 font-mono">Loading data...</span>
           ) : sparklineData ? (
             <svg
               width="100%"
@@ -308,7 +296,7 @@ export const InspectPanel: React.FC = () => {
                 <polyline
                   key={i}
                   fill="none"
-                  stroke="#38BDF8"
+                  stroke="#5EA8FF"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -324,7 +312,7 @@ export const InspectPanel: React.FC = () => {
                     y1={2}
                     x2={sparklineData.currentPoint.x}
                     y2={sparklineData.height - 2}
-                    stroke="#FBBF24"
+                    stroke="#FF6AD5"
                     strokeWidth="1.5"
                     strokeDasharray="2,2"
                   />
@@ -332,7 +320,7 @@ export const InspectPanel: React.FC = () => {
                     cx={sparklineData.currentPoint.x}
                     cy={sparklineData.currentPoint.y}
                     r="3.5"
-                    fill="#FBBF24"
+                    fill="#FF6AD5"
                     stroke="#FFFFFF"
                     strokeWidth="1.5"
                   />
@@ -340,32 +328,27 @@ export const InspectPanel: React.FC = () => {
               )}
             </svg>
           ) : (
-            <span className="text-[11px] text-slate-500 font-mono">No data points</span>
+            <span className="text-[11px] text-white/40 font-mono">No data points</span>
           )}
         </div>
       </div>
 
       {/* Control Buttons */}
-      <div className="mt-3 pt-3 border-t flex flex-wrap gap-2 text-xs" style={{ borderColor: '#1E2A40' }}>
+      <div className="mt-3 pt-3 border-t border-white/[0.08] flex flex-wrap gap-2 text-xs">
         {/* Play This Place */}
         <button
           type="button"
           onClick={() => playPoint(activeTrack, series, frameIndex, selection.lon)}
-          className="flex-1 min-w-[100px] px-3 py-1.5 rounded font-medium text-white transition-colors text-center"
-          style={{ backgroundColor: '#1E5BD8' }}
+          className="flex-1 min-w-[100px] px-3 py-1.5 rounded-xl font-medium text-white transition-all text-center accent-gradient-bg hover:brightness-110 shadow-sm"
         >
-          ▶ Play this place
+          Play this place
         </button>
 
         {/* Show / Hide Data Layer Toggle */}
         <button
           type="button"
           onClick={toggleDataLayer}
-          className="px-2.5 py-1.5 rounded font-mono border text-slate-300 hover:text-white transition-colors"
-          style={{
-            backgroundColor: '#070B14',
-            borderColor: '#1E2A40',
-          }}
+          className="px-2.5 py-1.5 rounded-xl font-mono border border-white/[0.08] bg-white/[0.05] hover:bg-white/[0.1] text-white/80 hover:text-white transition-colors"
         >
           {showDataLayer ? 'Hide overlay' : 'Show overlay'} (L)
         </button>
@@ -374,13 +357,9 @@ export const InspectPanel: React.FC = () => {
         <button
           type="button"
           onClick={clearSelection}
-          className="px-2.5 py-1.5 rounded font-mono border text-slate-400 hover:text-white transition-colors"
-          style={{
-            backgroundColor: '#070B14',
-            borderColor: '#1E2A40',
-          }}
+          className="px-2.5 py-1.5 rounded-xl font-mono border border-white/[0.08] bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white transition-colors"
         >
-          Close
+          Dismiss
         </button>
       </div>
     </aside>
