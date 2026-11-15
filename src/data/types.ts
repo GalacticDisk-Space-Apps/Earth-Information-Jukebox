@@ -101,3 +101,6 @@ export function sampleGrid(grid: ValueGrid, lat: number, lon: number): number | 
   if (idx < 0 || idx >= grid.values.length) return null;
   return grid.values[idx] ?? null;
 }
+
+export { placeName, formatCoordinates, formatValue, getPointSeries } from './series';
+

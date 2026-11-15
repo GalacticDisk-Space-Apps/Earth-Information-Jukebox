@@ -37,14 +37,23 @@ export function useKeyboard(options: UseKeyboardOptions = {}): void {
         return;
       }
 
-      // Escape key closes modal if open, otherwise clears cursor
+      // Escape key closes modal if open, otherwise clears selection & cursor
       if (e.key === 'Escape') {
         e.preventDefault();
         if (isHelpOpen) {
           onCloseHelp?.();
         } else {
+          store.clearSelection();
           store.setCursor(null);
         }
+        return;
+      }
+
+      // Enter key selects the point under cursor for inspection
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const target = store.cursor ?? { lat: 0, lon: 0 };
+        store.selectPoint(target.lat, target.lon);
         return;
       }
 
@@ -102,6 +111,13 @@ export function useKeyboard(options: UseKeyboardOptions = {}): void {
       if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         store.toggleMute();
+        return;
+      }
+
+      // L toggles data layer overlay
+      if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        store.toggleDataLayer();
         return;
       }
     };

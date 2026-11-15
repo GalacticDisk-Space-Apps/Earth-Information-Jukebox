@@ -13,6 +13,8 @@ import {
 import { loadValueGrid } from '@/data/loadTrack';
 import { engine } from './engine';
 
+export * from './pointAudio';
+
 /**
  * Headless React bridge connecting the Zustand jukebox store to the Tone.js AudioEngine.
  * Synchronizes playback transport, modes, spatial coordinates, volume, and active frame matrices.

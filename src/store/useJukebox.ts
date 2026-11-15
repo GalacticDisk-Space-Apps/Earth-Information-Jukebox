@@ -10,10 +10,13 @@ export interface JukeboxState {
   playing: boolean;
   playhead: number; // 0..1
   cursor: LatLon | null;
+  selection: LatLon | null;
   volume: number; // 0..1
   muted: boolean;
   reducedMotion: boolean;
   error: string | null;
+  showDataLayer: boolean;
+  dataLayerOpacity: number; // 0..1
 
   // Actions
   unlockAudio: () => void;
@@ -28,10 +31,15 @@ export interface JukeboxState {
   toggle: () => void;
   setPlayhead: (pos: number) => void;
   setCursor: (cursor: LatLon | null) => void;
+  selectPoint: (lat: number, lon: number) => void;
+  clearSelection: () => void;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
   setReducedMotion: (reduced: boolean) => void;
   setError: (error: string | null) => void;
+  toggleDataLayer: () => void;
+  setShowDataLayer: (show: boolean) => void;
+  setDataLayerOpacity: (opacity: number) => void;
 }
 
 export const useJukebox = create<JukeboxState>((set, get) => ({
@@ -43,10 +51,13 @@ export const useJukebox = create<JukeboxState>((set, get) => ({
   playing: false,
   playhead: 0,
   cursor: null,
+  selection: null,
   volume: 0.8,
   muted: false,
   reducedMotion: false,
   error: null,
+  showDataLayer: false,
+  dataLayerOpacity: 0.55,
 
   unlockAudio: () => {
     const current = get().status;
@@ -128,6 +139,17 @@ export const useJukebox = create<JukeboxState>((set, get) => ({
     set({ cursor });
   },
 
+  selectPoint: (lat: number, lon: number) => {
+    set({
+      selection: { lat, lon },
+      cursor: { lat, lon },
+    });
+  },
+
+  clearSelection: () => {
+    set({ selection: null });
+  },
+
   setVolume: (volume: number) => {
     const clamped = Math.max(0, Math.min(1, volume));
     set({ volume: clamped });
@@ -147,6 +169,19 @@ export const useJukebox = create<JukeboxState>((set, get) => ({
       status: error ? 'error' : get().status === 'error' ? 'ready' : get().status,
     });
   },
+
+  toggleDataLayer: () => {
+    set((state) => ({ showDataLayer: !state.showDataLayer }));
+  },
+
+  setShowDataLayer: (showDataLayer: boolean) => {
+    set({ showDataLayer });
+  },
+
+  setDataLayerOpacity: (dataLayerOpacity: number) => {
+    const clamped = Math.max(0, Math.min(1, dataLayerOpacity));
+    set({ dataLayerOpacity: clamped });
+  },
 }));
 
 // Granular selector hooks for optimal component rendering performance
@@ -161,3 +196,6 @@ export const useFrameIndex = () => useJukebox((s) => s.frameIndex);
 export const useVolume = () => useJukebox((s) => s.volume);
 export const useIsMuted = () => useJukebox((s) => s.muted);
 export const useReducedMotion = () => useJukebox((s) => s.reducedMotion);
+export const useShowDataLayer = () => useJukebox((s) => s.showDataLayer);
+export const useDataLayerOpacity = () => useJukebox((s) => s.dataLayerOpacity);
+export const useSelection = () => useJukebox((s) => s.selection);

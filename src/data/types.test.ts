@@ -4,6 +4,9 @@ import {
   rowToLat,
   gridIndex,
   sampleGrid,
+  placeName,
+  formatValue,
+  getPointSeries,
   type ValueGrid,
 } from './types';
 
@@ -82,6 +85,27 @@ describe('Coordinate Conversion & Grid Helpers', () => {
     it('returns null if grid values array is empty', () => {
       const grid: ValueGrid = { w, h, values: [] };
       expect(sampleGrid(grid, 0, 0)).toBeNull();
+    });
+  });
+
+  describe('placeName and formatValue', () => {
+    it('identifies Arabian Sea and major water bodies', () => {
+      expect(placeName(18, 65)).toBe('Arabian Sea');
+      expect(placeName(0, -140)).toBe('Equatorial Pacific');
+    });
+
+    it('formats values with units and handles null', () => {
+      expect(formatValue(29.1, '°C')).toBe('29.1 °C');
+      expect(formatValue(null, '°C')).toBe('No data');
+    });
+  });
+
+  describe('getPointSeries', () => {
+    it('returns 21 frames for a geographic point', async () => {
+      const series = await getPointSeries('ocean-fever', 0, 0);
+      expect(series).toHaveLength(21);
+      expect(series[0]).toHaveProperty('date');
+      expect(series[0]).toHaveProperty('value');
     });
   });
 });
