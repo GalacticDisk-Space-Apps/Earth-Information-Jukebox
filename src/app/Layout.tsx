@@ -10,6 +10,7 @@ import {
 import { Globe } from '@/globe/Globe';
 import { Deck } from '@/ui/Deck';
 import { Legend } from '@/ui/Legend';
+import { InspectPanel } from '@/ui/InspectPanel';
 
 interface LayoutProps {
   onOpenHelp?: () => void;
@@ -84,7 +85,7 @@ export const Layout: React.FC<LayoutProps> = ({ onOpenHelp }) => {
         {/* Globe Visualization Area (Desktop Left 62%, Stacks on Top under 900px) */}
         <section
           aria-label="3D Globe Visualization"
-          className="w-full min-[900px]:w-[62%] flex-1 flex flex-col rounded-lg border overflow-hidden p-2 min-[900px]:p-4"
+          className="relative w-full min-[900px]:w-[62%] flex-1 flex flex-col rounded-lg border overflow-hidden p-2 min-[900px]:p-4"
           style={{
             backgroundColor: '#0F1626',
             borderColor: '#1E2A40',
@@ -93,6 +94,7 @@ export const Layout: React.FC<LayoutProps> = ({ onOpenHelp }) => {
           <div className="flex-1 w-full h-full min-h-[280px]">
             <Globe />
           </div>
+          <InspectPanel />
         </section>
 
         {/* Right Column Controls (Desktop Right 38%, Stacks Below under 900px) */}

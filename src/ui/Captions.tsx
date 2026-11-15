@@ -1,12 +1,24 @@
 import React from 'react';
-import { useActiveTrack, usePlayhead, useIsPlaying } from '@/store/useJukebox';
+import { useActiveTrack, usePlayhead, useIsPlaying, useSelection } from '@/store/useJukebox';
+import { placeName, formatCoordinates } from '@/data/series';
 
 export const Captions: React.FC = () => {
   const activeTrack = useActiveTrack();
   const playhead = usePlayhead();
   const isPlaying = useIsPlaying();
+  const selection = useSelection();
 
   const currentLon = Math.round(-180 + playhead * 360);
+
+  let message = 'Playback paused. Ready to explore.';
+
+  if (selection) {
+    const name = placeName(selection.lat, selection.lon);
+    const coords = formatCoordinates(selection.lat, selection.lon);
+    message = `Inspecting ${name} (${coords}) on ${activeTrack?.title ?? 'dataset'}. Audio sonification active. Press Escape to close inspector.`;
+  } else if (isPlaying) {
+    message = `Scanning ${activeTrack?.title ?? 'dataset'} at longitude ${currentLon}°: active audio synthesis.`;
+  }
 
   return (
     <div
@@ -24,14 +36,10 @@ export const Captions: React.FC = () => {
         aria-atomic="true"
         className="text-xs text-slate-300 font-mono"
       >
-        {isPlaying ? (
-          <p>
-            Scanning {activeTrack?.title ?? 'dataset'} at longitude {currentLon}°: active audio synthesis.
-          </p>
-        ) : (
-          <p>Playback paused. Ready to explore.</p>
-        )}
+        <p>{message}</p>
       </div>
     </div>
   );
 };
+
+export default Captions;

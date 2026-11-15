@@ -17,7 +17,9 @@ const SHORTCUTS: ShortcutItem[] = [
   { key: 'ArrowUp / ArrowDown', description: 'Step frame year forward / backward (2004–2024)' },
   { key: '1 - 4', description: 'Directly switch active dataset track' },
   { key: 'M', description: 'Toggle master audio mute' },
-  { key: 'Escape', description: 'Clear inspection cursor / Close dialog' },
+  { key: 'Enter', description: 'Inspect selected point (plays sound & shows data)' },
+  { key: 'L', description: 'Toggle data layer overlay' },
+  { key: 'Escape', description: 'Clear inspection selection / Close dialog' },
   { key: '?', description: 'Toggle this keyboard shortcuts dialog' },
 ];
 
