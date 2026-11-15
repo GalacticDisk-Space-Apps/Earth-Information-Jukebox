@@ -63,6 +63,7 @@ export const Deck: React.FC = () => {
         {/* Transport Buttons */}
         <div className="flex items-center gap-2 shrink-0">
           <motion.button
+            id="main-play-button"
             type="button"
             onClick={toggle}
             whileHover={reducedMotion ? {} : { scale: 1.02 }}

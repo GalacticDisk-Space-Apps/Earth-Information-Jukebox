@@ -16,9 +16,10 @@ import { InspectPanel } from '@/ui/InspectPanel';
 
 interface LayoutProps {
   onOpenHelp?: () => void;
+  isEntering?: boolean;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ onOpenHelp }) => {
+export const Layout: React.FC<LayoutProps> = ({ onOpenHelp, isEntering = false }) => {
   const activeTrack = useActiveTrack();
   const frameIndex = useFrameIndex();
   const mode = useMode();
@@ -94,9 +95,17 @@ export const Layout: React.FC<LayoutProps> = ({ onOpenHelp }) => {
         {/* Globe Visualization Area (Desktop Left 62%, Stacks on Top under 900px) */}
         <motion.section
           aria-label="3D Globe Visualization"
-          initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: easeCurve, delay: reducedMotion ? 0 : 0.06 }}
+          initial={
+            reducedMotion
+              ? { opacity: 0 }
+              : { opacity: 0, scale: isEntering ? 1.15 : 1, y: isEntering ? 0 : 12 }
+          }
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{
+            duration: isEntering ? 0.9 : 0.6,
+            ease: easeCurve,
+            delay: reducedMotion ? 0 : 0.05,
+          }}
           className="relative w-full min-[900px]:w-[62%] flex-1 flex flex-col rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl overflow-hidden p-1 sm:p-2 shadow-2xl"
         >
           <div className="flex-1 w-full h-full min-h-[280px]">

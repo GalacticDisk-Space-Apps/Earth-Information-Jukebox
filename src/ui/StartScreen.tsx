@@ -1,18 +1,32 @@
 import React, { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useJukebox, useReducedMotion, useStatus } from '@/store/useJukebox';
+import { engine } from '@/audio/engine';
 import { HeroGlobe } from './HeroGlobe';
+import { preloadCloudTexture } from './CloudTransition';
 
 const TITLE = 'Earth Information Jukebox';
 
-export const StartScreen: React.FC = () => {
+export interface StartScreenProps {
+  onDropNeedle?: () => void;
+  isTransitioning?: boolean;
+}
+
+export const StartScreen: React.FC<StartScreenProps> = ({
+  onDropNeedle,
+  isTransitioning = false,
+}) => {
   const status = useStatus();
   const unlockAudio = useJukebox((s) => s.unlockAudio);
   const reducedMotion = useReducedMotion();
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const startedRef = useRef(false);
 
   // Auto-focus the primary start button on mount for immediate keyboard accessibility
+  // and preload the cloud texture on mount so there is 0 hitch on click
   useEffect(() => {
+    preloadCloudTexture();
+
     if (status === 'idle') {
       const timer = setTimeout(() => {
         buttonRef.current?.focus();
@@ -21,16 +35,42 @@ export const StartScreen: React.FC = () => {
     }
   }, [status]);
 
-  if (status !== 'idle') return null;
+  const handleStartClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+
+    // Guard: transition must start exactly once
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    // 1. FIRST call unlockAudio() and engine.start() synchronously inside click handler
+    // for immediate browser Web Audio context unlocking via direct user gesture
+    unlockAudio();
+    engine.start().catch((err) => {
+      console.error('Failed to unlock Web Audio context in gesture:', err);
+    });
+
+    // 2. THEN start the cinematic transition
+    onDropNeedle?.();
+  };
 
   const easeCurve: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
   return (
-    <div
+    <motion.div
       data-testid="start-screen-container"
       role="main"
       aria-label="Welcome to Earth Information Jukebox"
-      className="fixed inset-0 z-50 flex flex-col items-center justify-between overflow-hidden bg-black text-white px-4 py-8 sm:py-10 select-none"
+      // Start screen fades out over p 0.00 - 0.15 (0.36s) while clouds start
+      animate={
+        isTransitioning && !reducedMotion
+          ? { opacity: 0, filter: 'blur(8px)', pointerEvents: 'none' }
+          : { opacity: 1, filter: 'blur(0px)' }
+      }
+      transition={{
+        duration: isTransitioning ? 0.36 : 0.6,
+        ease: 'easeOut',
+      }}
+      className="fixed inset-0 z-40 flex flex-col items-center justify-between overflow-hidden bg-black text-white px-4 py-8 sm:py-10 select-none"
     >
       {/* Background Atmosphere: Soft Drifting Auroras */}
       <div
@@ -106,32 +146,41 @@ export const StartScreen: React.FC = () => {
         </motion.p>
       </header>
 
-      {/* Center 3D Earth Section (Large Rotating Photorealistic Planet) */}
+      {/* Center 3D Earth Section: Scales up smoothly during p 0.00 - 0.15 (0.36s) */}
       <motion.div
         aria-hidden="true"
         initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 1.1, ease: easeCurve, delay: reducedMotion ? 0 : 0.1 }}
+        animate={
+          isTransitioning && !reducedMotion
+            ? { scale: 2.3, opacity: 0.4 }
+            : { opacity: 1, scale: 1 }
+        }
+        transition={
+          isTransitioning
+            ? { duration: 0.36, ease: 'easeIn' }
+            : { duration: 1.1, ease: easeCurve, delay: reducedMotion ? 0 : 0.1 }
+        }
         className="relative z-0 w-full flex-1 flex items-center justify-center my-2 max-h-[58vh] min-h-[260px] aspect-square"
       >
         <HeroGlobe className="w-full h-full max-w-[500px] max-h-[500px]" />
       </motion.div>
 
-      {/* Bottom Action Section (Below Earth) */}
+      {/* Bottom Action Section */}
       <motion.footer
         initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: easeCurve, delay: reducedMotion ? 0 : 1.35 }}
         className="relative z-10 flex flex-col items-center gap-3.5 mb-2 sm:mb-4"
       >
-        {/* Primary Start Button: Pill-shaped with 1px Gradient Border & 3s Pulsing Glow */}
+        {/* Primary Start Button */}
         <motion.button
           ref={buttonRef}
           type="button"
-          onClick={unlockAudio}
-          whileHover={reducedMotion ? {} : { scale: 1.025 }}
-          whileTap={reducedMotion ? {} : { scale: 0.975 }}
-          className="relative group p-[1px] rounded-full accent-gradient-bg button-pulse-glow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5EA8FF] focus-visible:ring-offset-4 focus-visible:ring-offset-black transition-transform"
+          onClick={handleStartClick}
+          disabled={isTransitioning}
+          whileHover={reducedMotion || isTransitioning ? {} : { scale: 1.025 }}
+          whileTap={reducedMotion || isTransitioning ? {} : { scale: 0.975 }}
+          className="relative group p-[1px] rounded-full accent-gradient-bg button-pulse-glow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5EA8FF] focus-visible:ring-offset-4 focus-visible:ring-offset-black transition-transform cursor-pointer disabled:cursor-default disabled:opacity-50"
           aria-label="Drop the needle and launch the Earth Information Jukebox"
         >
           <span className="flex items-center justify-center gap-2 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full bg-black font-sans font-medium text-sm sm:text-base text-white tracking-wide transition-colors group-hover:bg-black/90">
@@ -144,7 +193,7 @@ export const StartScreen: React.FC = () => {
           HEADPHONES RECOMMENDED
         </p>
       </motion.footer>
-    </div>
+    </motion.div>
   );
 };
 
