@@ -47,8 +47,10 @@ export const AudioEngine: React.FC = () => {
   }, [setPlayhead, nextFrame]);
 
   // Audio Unlock on user gesture (e.g. StartScreen click)
+  // Note: 'audioUnlocked' is no longer emitted — unlockAudio() now transitions
+  // directly to 'ready'. Check kept for defensive safety on 'playing' fast-path.
   useEffect(() => {
-    if (status === 'audioUnlocked' || status === 'ready' || status === 'playing') {
+    if (status === 'ready' || status === 'playing') {
       engine.start().catch((err) => {
         console.error('Failed to unlock Web Audio context:', err);
       });
@@ -72,9 +74,17 @@ export const AudioEngine: React.FC = () => {
     engine.setMode(mode);
   }, [mode]);
 
-  // Play / Pause transport toggle
-  const prevPlayingRef = useRef(isPlaying);
+  // Play / Pause transport toggle.
+  // useRef is initialized to `true` so that on first mount (isPlaying is false)
+  // the guard fires correctly and does NOT call engine.pause() redundantly.
+  // On remount while already playing, the effect syncs the ref immediately.
+  const prevPlayingRef = useRef<boolean | null>(null);
   useEffect(() => {
+    // Sync ref on (re)mount so remounts don't trigger a spurious play/pause call.
+    if (prevPlayingRef.current === null) {
+      prevPlayingRef.current = isPlaying;
+      return;
+    }
     if (isPlaying !== prevPlayingRef.current) {
       prevPlayingRef.current = isPlaying;
       if (isPlaying) {
