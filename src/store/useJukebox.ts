@@ -14,6 +14,8 @@ export interface JukeboxState {
   muted: boolean;
   reducedMotion: boolean;
   error: string | null;
+  showDataLayer: boolean;
+  dataLayerOpacity: number; // 0..1
 
   // Actions
   unlockAudio: () => void;
@@ -32,6 +34,9 @@ export interface JukeboxState {
   toggleMute: () => void;
   setReducedMotion: (reduced: boolean) => void;
   setError: (error: string | null) => void;
+  toggleDataLayer: () => void;
+  setShowDataLayer: (show: boolean) => void;
+  setDataLayerOpacity: (opacity: number) => void;
 }
 
 export const useJukebox = create<JukeboxState>((set, get) => ({
@@ -47,6 +52,8 @@ export const useJukebox = create<JukeboxState>((set, get) => ({
   muted: false,
   reducedMotion: false,
   error: null,
+  showDataLayer: false,
+  dataLayerOpacity: 0.55,
 
   unlockAudio: () => {
     const current = get().status;
@@ -147,6 +154,19 @@ export const useJukebox = create<JukeboxState>((set, get) => ({
       status: error ? 'error' : get().status === 'error' ? 'ready' : get().status,
     });
   },
+
+  toggleDataLayer: () => {
+    set((state) => ({ showDataLayer: !state.showDataLayer }));
+  },
+
+  setShowDataLayer: (showDataLayer: boolean) => {
+    set({ showDataLayer });
+  },
+
+  setDataLayerOpacity: (dataLayerOpacity: number) => {
+    const clamped = Math.max(0, Math.min(1, dataLayerOpacity));
+    set({ dataLayerOpacity: clamped });
+  },
 }));
 
 // Granular selector hooks for optimal component rendering performance
@@ -161,3 +181,5 @@ export const useFrameIndex = () => useJukebox((s) => s.frameIndex);
 export const useVolume = () => useJukebox((s) => s.volume);
 export const useIsMuted = () => useJukebox((s) => s.muted);
 export const useReducedMotion = () => useJukebox((s) => s.reducedMotion);
+export const useShowDataLayer = () => useJukebox((s) => s.showDataLayer);
+export const useDataLayerOpacity = () => useJukebox((s) => s.dataLayerOpacity);

@@ -26,7 +26,8 @@ function createEmptyTexture(): THREE.Texture {
 /**
  * Generates an equirectangular CanvasTexture from a ValueGrid with a blue-to-red color ramp.
  * Row 0 is 90°N (top), Col 0 is 180°W (left edge).
- * Null values (such as land in ocean datasets) remain transparent.
+ * Null values (such as continental land in ocean datasets) remain 100% transparent (alpha 0)
+ * so the photorealistic Blue Marble Earth underneath shows through untouched.
  */
 export function createFakeGridTexture(frameIndex: number): THREE.Texture {
   if (typeof document === 'undefined') {
@@ -55,7 +56,7 @@ export function createFakeGridTexture(frameIndex: number): THREE.Texture {
       const val = grid.values[gridIdx];
 
       if (val === null) {
-        // Transparent for masked areas (allows underlying Earth texture to show through)
+        // Zero alpha for masked/no-data areas (allows real Earth terrain to show through)
         data[pixelIdx] = 0;
         data[pixelIdx + 1] = 0;
         data[pixelIdx + 2] = 0;
@@ -94,7 +95,7 @@ export function createFakeGridTexture(frameIndex: number): THREE.Texture {
         data[pixelIdx] = r;
         data[pixelIdx + 1] = g;
         data[pixelIdx + 2] = b;
-        data[pixelIdx + 3] = 230; // 0.9 base alpha
+        data[pixelIdx + 3] = 255; // Full alpha on data points
       }
     }
   }
@@ -124,20 +125,59 @@ const fragmentShader = `
   uniform sampler2D uPrevTexture;
   uniform sampler2D uCurrTexture;
   uniform float uBlend;
-  uniform float uOpacity;
+  uniform float uCurrentBaseOpacity;
+  uniform float uActiveOpacity;
+  uniform float uScanLon;
+  uniform float uIsSweepActive;
+  uniform float uBandWidth;
   varying vec2 vUv;
 
   void main() {
     vec4 colPrev = texture2D(uPrevTexture, vUv);
     vec4 colCurr = texture2D(uCurrTexture, vUv);
-    vec4 mixedColor = mix(colPrev, colCurr, uBlend);
-    gl_FragColor = vec4(mixedColor.rgb, mixedColor.a * uOpacity);
+    vec4 dataCol = mix(colPrev, colCurr, uBlend);
+
+    // If pixel has no data (alpha <= 0.01), discard so the realistic Earth underneath is 100% visible
+    if (dataCol.a <= 0.01) {
+      discard;
+    }
+
+    // Equirectangular fragment longitude in degrees (-180° to +180°)
+    float fragLon = vUv.x * 360.0 - 180.0;
+    float lonDiff = abs(fragLon - uScanLon);
+    if (lonDiff > 180.0) {
+      lonDiff = 360.0 - lonDiff;
+    }
+
+    // Soft band around the scan-line (+-12 degrees, smoothly trailing off up to ~18 degrees)
+    float bandFactor = 1.0 - smoothstep(uBandWidth * 0.7, uBandWidth * 1.5, lonDiff);
+
+    // Determine local opacity:
+    // - While sweep is active, the soft band under the scan-line shows data at full strength
+    //   while the rest of the planet stays at uCurrentBaseOpacity (0.0 when toggled off).
+    // - When sweep is idle, the entire overlay is at uCurrentBaseOpacity.
+    float localOpacity = uCurrentBaseOpacity;
+    if (uIsSweepActive > 0.5) {
+      float sweepStrength = max(uCurrentBaseOpacity, uActiveOpacity);
+      localOpacity = mix(uCurrentBaseOpacity, sweepStrength, bandFactor);
+    }
+
+    if (localOpacity <= 0.001) {
+      discard;
+    }
+
+    gl_FragColor = vec4(dataCol.rgb, dataCol.a * localOpacity);
   }
 `;
 
 /**
- * DataLayer component rendering the current satellite dataset frame onto a transparent
- * sphere of radius 1.005, with 400ms cross-fading between frame/track changes.
+ * DataLayer component rendering the NASA satellite dataset frame over the Earth.
+ * Key properties:
+ * - Does NOT dominate the planet: hidden / faint by default so real Earth is what people see first.
+ * - Smoothly fades in and out over 400ms when toggled via showDataLayer (shortcut 'L').
+ * - While the sweep is playing, only a soft band around the scan-line (+-12 deg lon) shows full
+ *   data strength, leaving the rest of the planet realistic.
+ * - No-data pixels have alpha 0, keeping Blue Marble land intact for ocean datasets.
  */
 export const DataLayer: React.FC = () => {
   const trackId = useJukebox((s) => s.trackId);
@@ -155,6 +195,29 @@ export const DataLayer: React.FC = () => {
   const blendRef = useRef<number>(1.0);
   const isTransitioningRef = useRef<boolean>(false);
 
+  // Transient store subscription refs to avoid React re-renders at 60Hz
+  const playheadRef = useRef<number>(useJukebox.getState().playhead);
+  const playingRef = useRef<boolean>(useJukebox.getState().playing);
+  const modeRef = useRef<string>(useJukebox.getState().mode);
+  const showDataLayerRef = useRef<boolean>(useJukebox.getState().showDataLayer);
+  const dataLayerOpacityRef = useRef<number>(useJukebox.getState().dataLayerOpacity);
+
+  // Current base opacity animated over 400ms (0.0 to dataLayerOpacity)
+  const currentBaseOpacityRef = useRef<number>(
+    useJukebox.getState().showDataLayer ? useJukebox.getState().dataLayerOpacity : 0.0
+  );
+
+  useEffect(() => {
+    const unsub = useJukebox.subscribe((state) => {
+      playheadRef.current = state.playhead;
+      playingRef.current = state.playing;
+      modeRef.current = state.mode;
+      showDataLayerRef.current = state.showDataLayer;
+      dataLayerOpacityRef.current = state.dataLayerOpacity;
+    });
+    return unsub;
+  }, []);
+
   // Shader material
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -164,7 +227,11 @@ export const DataLayer: React.FC = () => {
         uPrevTexture: { value: emptyTexture },
         uCurrTexture: { value: emptyTexture },
         uBlend: { value: 1.0 },
-        uOpacity: { value: 0.85 },
+        uCurrentBaseOpacity: { value: 0.0 },
+        uActiveOpacity: { value: 0.55 },
+        uScanLon: { value: 0.0 },
+        uIsSweepActive: { value: 0.0 },
+        uBandWidth: { value: 12.0 },
       },
       transparent: true,
       depthWrite: false,
@@ -212,7 +279,7 @@ export const DataLayer: React.FC = () => {
         },
         undefined,
         () => {
-          // If frame file is not found, fallback to synthetic grid to maintain visualization
+          // If frame file is not found, fallback to synthetic grid overlay
           if (!isMounted) return;
           const fallbackTex = createFakeGridTexture(frameIndex);
           prevTextureRef.current = currTextureRef.current;
@@ -230,10 +297,10 @@ export const DataLayer: React.FC = () => {
     };
   }, [activeTrack, activeFrameDate, frameIndex, material]);
 
-  // Animate 400ms crossfade over delta time
+  // Animate cross-fades and smooth 400ms opacity transitions on every frame
   useFrame((_, delta) => {
+    // 1. Frame crossfade animation (400ms)
     if (isTransitioningRef.current) {
-      // 0.4s (400ms) crossfade
       blendRef.current = Math.min(1.0, blendRef.current + delta / 0.4);
       material.uniforms.uBlend.value = blendRef.current;
 
@@ -243,6 +310,32 @@ export const DataLayer: React.FC = () => {
         material.uniforms.uPrevTexture.value = currTextureRef.current;
       }
     }
+
+    // 2. Smooth 400ms fade in / fade out for showDataLayer toggle
+    const targetBaseOpacity = showDataLayerRef.current ? dataLayerOpacityRef.current : 0.0;
+    const opacityDelta = (delta / 0.4) * (dataLayerOpacityRef.current || 0.55);
+
+    if (currentBaseOpacityRef.current < targetBaseOpacity) {
+      currentBaseOpacityRef.current = Math.min(
+        targetBaseOpacity,
+        currentBaseOpacityRef.current + opacityDelta
+      );
+    } else if (currentBaseOpacityRef.current > targetBaseOpacity) {
+      currentBaseOpacityRef.current = Math.max(
+        targetBaseOpacity,
+        currentBaseOpacityRef.current - opacityDelta
+      );
+    }
+
+    material.uniforms.uCurrentBaseOpacity.value = currentBaseOpacityRef.current;
+    material.uniforms.uActiveOpacity.value = dataLayerOpacityRef.current;
+
+    // 3. Scan-line position and sweep activity for soft focus band
+    const lonDeg = playheadRef.current * 360 - 180;
+    material.uniforms.uScanLon.value = lonDeg;
+
+    const isSweepMode = modeRef.current === 'sweep' || modeRef.current === 'timelapse';
+    material.uniforms.uIsSweepActive.value = playingRef.current && isSweepMode ? 1.0 : 0.0;
   });
 
   return (
