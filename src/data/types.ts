@@ -36,6 +36,15 @@ export type AppStatus =
   | 'paused'
   | 'error';
 
+export type TrendPoint = {
+  date: string;
+  year: string;
+  mean: number | null;
+  min: number | null;
+  max: number | null;
+  sampleCount?: number;
+};
+
 /**
  * Converts a grid column index (0..w-1) to longitude in degrees (-180..180).
  */
